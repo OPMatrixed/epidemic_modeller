@@ -8,7 +8,6 @@ from epidemicmodeller import modeloutput
 
 screensize = 800
 dotsize = 4
-speed = 0.04
 
 
 class BasicModel(object):
@@ -16,6 +15,15 @@ class BasicModel(object):
 
     def __init__(self, parameters):
         self.params = parameters
+        self.max_duration = self.params.get("max_duration", 1000)
+        self.timesteps_per_day = self.params.get("timesteps_per_day", 10)
+        self.timestep = 1/self.timesteps_per_day
+        self.speed = self.params.get("speed", 0.04)
+        self.params["max_duration"] = self.max_duration
+        self.params["timesteps_per_day"] = self.timesteps_per_day
+        self.params["timestep"] = self.timestep
+        self.params["infect_distance"] = self.params.get("infect_distance", 0.05)
+        self.params["speed"] = self.speed
         self.params["E"] = parameters.get("E", 0)
         self.params["I"] = parameters.get("I", 1)
         self.params["R"] = parameters.get("R", 0)
@@ -26,15 +34,14 @@ class BasicModel(object):
             self.params["N"] = parameters["S"] + parameters["E"] + parameters["I"] + parameters["R"]
 
     def run_model(self):
+        tic = time.perf_counter()
+
         infect_rate = self.params.get("infect_rate", 2)
         latency_rate = self.params.get("latency_rate", 4)
         recovery_rate = self.params.get("recovery_rate", 6)
         next_infect_function = lambda: np.random.exponential(infect_rate)
         latency_end_function = lambda: np.random.gamma(latency_rate)
         recovery_function = lambda: np.random.gamma(recovery_rate)
-
-        timesteps_per_day = self.params.get("timesteps_per_day", 8)
-        timestep = 1/timesteps_per_day
 
         state = np.array([0] * self.params["S"] + [1] * self.params["E"] + [2] * self.params["I"] + [3] * self.params["R"])
         infected_time = state*0
@@ -49,19 +56,23 @@ class BasicModel(object):
 
         x_coords = np.random.uniform(size=self.params["N"])
         y_coords = np.random.uniform(size=self.params["N"])
-        x_velocs = np.random.uniform(-1, 1, size=self.params["N"]) * speed * timestep
-        y_velocs = np.random.uniform(-1, 1, size=self.params["N"]) * speed * timestep
-        pygame.init()
+        x_velocs = np.random.uniform(-1, 1, size=self.params["N"]) * self.speed * self.timestep
+        y_velocs = np.random.uniform(-1, 1, size=self.params["N"]) * self.speed * self.timestep
 
-        screen = pygame.display.set_mode((screensize, screensize))
+        state_log = np.zeros((self.max_duration * self.timesteps_per_day, len(state)))
+        x_coords_log = np.zeros((self.max_duration * self.timesteps_per_day, self.params["N"]))
+        y_coords_log = np.zeros((self.max_duration * self.timesteps_per_day, self.params["N"]))
+        event_log = [[] for _ in range(self.max_duration * self.timesteps_per_day)]
+        state_log[0] = state
+        x_coords_log[0] = x_coords
+        y_coords_log[0] = y_coords
+
+        #pygame.init()
+        #screen = pygame.display.set_mode((screensize, screensize))
 
         t = 0
         k = 0
-        while (1 in state or 2 in state) and t <= self.params.get("max_duration", 1000):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.display.quit()
-                    break
+        while (1 in state or 2 in state) and t <= self.max_duration:
             x_coords = x_coords + x_velocs
             y_coords = y_coords + y_velocs
             invalid = np.where(x_coords > 1)[0]
@@ -80,49 +91,53 @@ class BasicModel(object):
             for i in invalid:
                 y_coords[i] = -y_coords[i]
                 y_velocs[i] *= -1
-            t += timestep
+            t += self.timestep
             k += 1
 
-            screen.fill((0, 0, 0))
-            colours = [pygame.Color(255, 255, 255),
-                       pygame.Color(0, 255, 0),
-                       pygame.Color(255, 0, 0),
-                       pygame.Color(100, 100, 100)]
-            for i in range(len(x_coords)):
-                pygame.draw.circle(screen, colours[state[i]],
-                                   (round(x_coords[i]*screensize), round(y_coords[i]*screensize)), dotsize)
-            if k % 16 == 0:
-                print("Time", t)
+            # Event IDs: Infect attempt: 0, Got Exposed: 1, Latency ended: 2, Recovery: 3
             for j in np.where(next_event < t)[0]:
-                if state[j] == 1:
+                if state[j] == 1:  # Exposed -> Infectious
                     state[j] = 2
                     next_event[j] = t + next_infect_function()
                     next_recovery_event[j] = t + recovery_function()
-                elif state[j] == 2:
+                    event_log[k].append((j, 2))
+                elif state[j] == 2:  # Infecting another
                     next_event[j] = t + next_infect_function()
-                    pixel_radius = maths.ceil(self.params.get("infect_distance", 0.05)*screensize/2)
-                    rect = pygame.Rect(np.round(x_coords[j] * screensize)-pixel_radius, np.round(y_coords[j] * screensize)-pixel_radius, pixel_radius*2, pixel_radius*2)
-                    pygame.draw.rect(screen, pygame.Color(150, 0, 0), rect)
+                    event_log[k].append((j, 0))
                     for l in np.where(state == 0)[0]:
                         if max(np.abs(x_coords[l] - x_coords[j]), np.abs(y_coords[l] - y_coords[j])) < self.params.get("infect_distance", 0.05):
                             state[l] = 1
                             next_event[l] = t + latency_end_function()
+                            event_log[k].append((l, 1))
                             break
-            for j in np.where(next_recovery_event < t)[0]:
+            for j in np.where(next_recovery_event < t)[0]:  # Recovery
                 next_recovery_event[j] = np.Inf
                 next_event[j] = np.Inf
                 state[j] = 3
-            pygame.display.flip()
-            time.sleep(0.05)
-        time.sleep(3)
-        pygame.display.quit()
-        return BasicModelOutput(self.params, sum(state == 3) - self.params["R"], t, None)
+                event_log[k].append((j, 3))
+
+            state_log[k] = state
+            x_coords_log[k] = x_coords
+            y_coords_log[k] = y_coords
+
+        logindex = round(t * self.timesteps_per_day)
+        state_log = state_log[:logindex]
+        x_coords_log = x_coords_log[:logindex]
+        y_coords_log = y_coords_log[:logindex]
+        event_log = event_log[:logindex]
+        toc = time.perf_counter()
+        return BasicModelOutput(self.params, sum(state == 3) - self.params["R"], round(t, 3), toc - tic,
+                                {"state_log": state_log, "x_coords_log": x_coords_log,
+                                 "y_coords_log": y_coords_log, "event_log": event_log})
 
 
 class BasicModelOutput(modeloutput.ModelOutput):
-    def __init__(self, params, final_size, duration, data_log):
-        modeloutput.ModelOutput.__init__(self, "basicmodel", params, final_size, duration, data_log)
+    def __init__(self, params, final_size, duration, simulation_time, data_log):
+        modeloutput.ModelOutput.__init__(self, "basicmodel", params, final_size, duration, simulation_time, data_log)
 
 
 if __name__ == "__main__":
     output = BasicModel({"N": 200, "I": 1}).run_model()
+    print(f"Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, and had a final size of {output.final_size}")
+    from epidemicmodeller import basicmodelrenderer
+    basicmodelrenderer.render_basic_model(output)
