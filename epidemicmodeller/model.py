@@ -16,33 +16,30 @@ class BasicModel(object):
 
     def __init__(self, parameters):
         self.params = parameters
-        self.max_duration = self.params.get("max_duration", 1000)
-        self.timesteps_per_day = self.params.get("timesteps_per_day", 10)
-        self.timestep = 1 / self.timesteps_per_day
-        self.speed = self.params.get("speed", 0.04)
-        self.params["max_duration"] = self.max_duration
-        self.params["timesteps_per_day"] = self.timesteps_per_day
-        self.params["timestep"] = self.timestep
-        self.params["infect_distance"] = self.params.get("infect_distance", 0.05)
-        self.params["speed"] = self.speed
+        self.params["max_duration"] = self.max_duration = self.params.get("max_duration", 1000)
+        self.params["timesteps_per_day"] = self.timesteps_per_day = self.params.get("timesteps_per_day", 10)
+        self.params["timestep"] = self.timestep = 1 / self.timesteps_per_day
+        self.params["speed"] = self.speed = self.params.get("speed", 0.04)
         self.params["E"] = parameters.get("E", 0)
         self.params["I"] = parameters.get("I", 1)
-        self.params["R"] = parameters.get("R", 0)
         self.params["R"] = parameters.get("R", 0)
         if "N" in parameters.keys():
             self.params["S"] = parameters.get("S", self.params["N"] - self.params["I"])
         else:
             self.params["N"] = parameters["S"] + parameters["E"] + parameters["I"] + parameters["R"]
+        self.params["b"] = self.params.get("b", 1)
+        self.params["lambda"] = (1-maths.exp(-self.params["b"]))/self.params["beta"]
+        self.params["infect_distance"] = self.params["b"]/maths.sqrt(self.params["N"])
 
     def run_model(self):
         tic = time.perf_counter()
 
-        infect_rate = self.params.get("infect_rate", 2)
-        latency_rate = self.params.get("latency_rate", 4)
-        recovery_rate = self.params.get("recovery_rate", 6)
+        infect_rate = self.params.get("lambda", 2)
+        latency_rate = 1/self.params.get("sigma", 1/4)
+        recovery_rate = 1/self.params.get("gamma", 1/6)
         next_infect_function = lambda: np.random.exponential(infect_rate)
         latency_end_function = lambda: np.random.gamma(latency_rate)
-        recovery_function = lambda: np.random.gamma(recovery_rate)
+        recovery_function = lambda: np.random.gamma(recovery_rate/infect_rate, infect_rate)
 
         state = np.array(
             [0] * self.params["S"] + [1] * self.params["E"] + [2] * self.params["I"] + [3] * self.params["R"])
@@ -111,8 +108,7 @@ class BasicModel(object):
                     next_event[j] = t + next_infect_function()
                     event_log[k].append((j, 0))
                     for l in np.where(state == 0)[0]:
-                        if max(np.abs(x_coords[l] - x_coords[j]), np.abs(y_coords[l] - y_coords[j])) < self.params.get(
-                                "infect_distance", 0.05):
+                        if max(np.abs(x_coords[l] - x_coords[j]), np.abs(y_coords[l] - y_coords[j])) < self.params["infect_distance"]:
                             state[l] = 1
                             next_event[l] = t + latency_end_function()
                             event_log[k].append((l, 1))
@@ -149,10 +145,10 @@ class BasicModelOutput(modeloutput.ModelOutput):
 
 
 if __name__ == "__main__":
-    output = BasicModel({"N": 500, "I": 1}).run_model()
-    print(
-        f"Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, and had a final size of {output.final_size}")
-    from epidemicmodeller import basicmodelrenderer
+    output = BasicModel({"N": 400, "I": 1, "gamma": 1/6, "beta": 1/4, "b": 1}).run_model()
+    print(f"Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, "
+          + f"and had a final size of {output.final_size}")
+
     fig, ax = plt.subplots()
     ax.plot(output.classes["t"], output.classes["S"])
     ax.plot(output.classes["t"], output.classes["E"])
@@ -161,4 +157,5 @@ if __name__ == "__main__":
     ax.legend(["S", "E", "I", "R"])
     ax.set(xlabel="Time (days)", ylabel="Infectious", title="Infectious over time")
     plt.show()
-    #basicmodelrenderer.render_basic_model(output)
+    from epidemicmodeller import basicmodelrenderer
+    basicmodelrenderer.render_basic_model(output)
