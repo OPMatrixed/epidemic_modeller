@@ -14,7 +14,7 @@ class BasicModel(object):
         self.params["max_duration"] = self.max_duration = self.params.get("max_duration", 1000)
         self.params["timesteps_per_day"] = self.timesteps_per_day = self.params.get("timesteps_per_day", 10)
         self.params["timestep"] = self.timestep = 1 / self.timesteps_per_day
-        self.params["speed"] = self.speed = self.params.get("speed", 0.04)
+        self.params["speed"] = self.speed = self.params.get("speed", 0.06)
         self.params["E"] = parameters.get("E", 0)
         self.params["I"] = parameters.get("I", 1)
         self.params["R"] = parameters.get("R", 0)

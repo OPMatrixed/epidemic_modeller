@@ -6,21 +6,21 @@ import time
 import math as maths
 
 
-def render_basic_model(model_output, screensize=800, dotsize=3, days_per_second=3):
+def render_compartment_model(model_output, screensize=800, dotsize=3, days_per_second=4):
     pygame.init()
     screen = pygame.display.set_mode((screensize, screensize))
-    pygame.display.set_caption("Epidemic Modeller: Basic model renderer")
     font = pygame.font.SysFont(None, 64)
 
     pixel_radius = maths.ceil(model_output.params["infect_distance"] * screensize / 2)
     delay = 1/(model_output.params["timesteps_per_day"]*days_per_second)
+    #print("Delay:", delay)
 
     event_log = model_output.data_log["event_log"]
     x_coord_log = model_output.data_log["x_coords_log"]
     y_coord_log = model_output.data_log["y_coords_log"]
     state_log = model_output.data_log["state_log"]
-
     time.sleep(2)
+
     for k in range(len(state_log)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
