@@ -123,11 +123,10 @@ class BasicModel(object):
             classes["R"].append(sum(state == 3))
             classes["t"].append(t)
 
-        logindex = round(t * self.timesteps_per_day)
-        state_log = state_log[:logindex]
-        x_coords_log = x_coords_log[:logindex]
-        y_coords_log = y_coords_log[:logindex]
-        event_log = event_log[:logindex]
+        state_log = state_log[:k]
+        x_coords_log = x_coords_log[:k]
+        y_coords_log = y_coords_log[:k]
+        event_log = event_log[:k]
         toc = time.perf_counter()
         return BasicModelOutput(self.params, sum(state == 3) - self.params["R"], classes, round(t, 3), toc - tic,
                                 {"state_log": state_log, "x_coords_log": x_coords_log,
@@ -144,13 +143,13 @@ if __name__ == "__main__":
     print(f"Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, "
           + f"and had a final size of {output.final_size}")
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(dpi=120)
     ax.plot(output.classes["t"], output.classes["S"])
     ax.plot(output.classes["t"], output.classes["E"])
     ax.plot(output.classes["t"], output.classes["I"])
     ax.plot(output.classes["t"], output.classes["R"])
     ax.legend(["S", "E", "I", "R"])
-    ax.set(xlabel="Time (days)", ylabel="Infectious", title="Infectious over time")
+    ax.set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
     plt.show()
     from epidemicmodeller import basicmodelrenderer
     basicmodelrenderer.render_basic_model(output)

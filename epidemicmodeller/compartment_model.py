@@ -41,6 +41,8 @@ class CompartmentModel(object):
                 i.step(t, k)
             t += self.params["timestep"]
             k += 1
+        for c in compartments:
+            c.finish(k)
         toc = time.perf_counter()
         classes = {}
         classes["S"] = np.array(compartments[0].classes["S"])
@@ -53,6 +55,7 @@ class CompartmentModel(object):
             classes["I"] = classes["I"] + np.array(compartments[i].classes["I"])
             classes["R"] = classes["R"] + np.array(compartments[i].classes["R"])
         classes["t"] = compartments[0].classes["t"]
+
         return CompartmentModelOutput(self.params, classes["R"][-1] - sum(self.params["R_"+str(i)] for i in range(self.params["compartments"])),
                                       classes, round(t, 3), toc - tic, compartments)
 
@@ -161,18 +164,28 @@ class Compartment(object):
         self.classes["t"].append(t)
         self.event_log[k] = event_log
 
+    def finish(self, k):
+        self.state_log = self.state_log[:k]
+        self.x_coords_log = self.x_coords_log[:k]
+        self.y_coords_log = self.y_coords_log[:k]
+        self.event_log = self.event_log[:k]
+
 
 if __name__ == "__main__":
-    output = CompartmentModel({"N": 400, "I_0": 10, "I_1": 20, "I_2": 5, "I_3": 1, "gamma": 1/6, "beta": 1/3, "b": 1, "compartments": 4}).run_model()
+    num_compartments = 9
+    output = CompartmentModel({"N": 700, "I": 1, "gamma": 1/6, "beta": 1/3, "b": 1, "compartments": num_compartments}).run_model()
     print(f"Compartment Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, "
           + f"and had a final size of {output.final_size}")
 
-    fig, ax = plt.subplots(2, 2)
-    for i in range(4):
-        ax[i//2][i%2].plot(output.classes["t"], output.compartments[i].classes["S"])
-        ax[i//2][i%2].plot(output.classes["t"], output.compartments[i].classes["E"])
-        ax[i//2][i%2].plot(output.classes["t"], output.compartments[i].classes["I"])
-        ax[i//2][i%2].plot(output.classes["t"], output.compartments[i].classes["R"])
-        ax[i//2][i%2].legend(["S", "E", "I", "R"])
-        ax[i//2][i%2].set(xlabel="Time (days)", ylabel="Infectious", title="Infectious over time")
+    row_length = maths.ceil(maths.sqrt(num_compartments))
+    fig, ax = plt.subplots(row_length, row_length, figsize=(row_length*3, row_length*3), dpi=100)
+    for i in range(num_compartments):
+        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["S"])
+        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["E"])
+        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["I"])
+        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["R"])
+        ax[i//row_length][i%row_length].legend(["S", "E", "I", "R"])
+        ax[i//row_length][i%row_length].set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
     plt.show()
+    from epidemicmodeller import comparment_model_renderer
+    comparment_model_renderer.render_compartment_model(output)

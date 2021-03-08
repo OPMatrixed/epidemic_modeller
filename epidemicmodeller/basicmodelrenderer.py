@@ -25,7 +25,7 @@ def render_basic_model(model_output, screensize=800, dotsize=3, days_per_second=
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.display.quit()
-                break
+                return
         screen.fill((0, 0, 0))
         colours = [pygame.Color(255, 255, 255),
                    pygame.Color(0, 255, 0),
@@ -44,8 +44,6 @@ def render_basic_model(model_output, screensize=800, dotsize=3, days_per_second=
         screen.blit(day_img, (20, 20))
         pygame.display.flip()
         time.sleep(delay)
-        #if k%(model_output.params["timesteps_per_day"]*10) == 0:
-        #    print(k/model_output.params["timesteps_per_day"])
 
     time.sleep(2)
     pygame.display.quit()
