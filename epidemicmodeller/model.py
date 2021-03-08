@@ -1,14 +1,9 @@
-import sys
 import time
 import math as maths
 import numpy as np
-import pygame
 import matplotlib.pyplot as plt
 
 from epidemicmodeller import modeloutput
-
-screensize = 800
-dotsize = 4
 
 
 class BasicModel(object):
@@ -69,11 +64,11 @@ class BasicModel(object):
         state_log[0] = state
         x_coords_log[0] = x_coords
         y_coords_log[0] = y_coords
-        classes["S"].append(sum(state == 0))
-        classes["E"].append(sum(state == 1))
-        classes["I"].append(sum(state == 2))
-        classes["R"].append(sum(state == 3))
-        classes["t"].append(t)
+        classes["S"].append(self.params["S"])
+        classes["E"].append(self.params["E"])
+        classes["I"].append(self.params["I"])
+        classes["R"].append(self.params["R"])
+        classes["t"].append(0)
 
         while (1 in state or 2 in state) and t <= self.max_duration:
             x_coords = x_coords + x_velocs
