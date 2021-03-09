@@ -1,9 +1,9 @@
-import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 import numpy as np
 import time
 import math as maths
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
 
 
 def render_basic_model(model_output, screensize=800, dotsize=3, days_per_second=3):

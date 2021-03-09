@@ -15,15 +15,15 @@ class CompartmentModel(object):
         self.params["max_duration"] = self.params.get("max_duration", 1000)
         self.params["timesteps_per_day"] = self.params.get("timesteps_per_day", 10)
         self.params["timestep"] = 1 / self.params["timesteps_per_day"]
-        self.params["speed"] = self.params.get("speed", 0.06)
+        self.params["speed"] = self.params.get("speed", 0.08)
+        self.params["travel_duration"] = self.params.get("travel_duration", 1)
+        self.params["mixing_rate"] = self.params.get("mixing_rate", 0.5)
         for i in range(self.params["compartments"]):
             self.params["E_"+str(i)] = parameters.get("E_"+str(i), parameters.get("E", 0))
             self.params["I_"+str(i)] = parameters.get("I_"+str(i), parameters.get("I", 0))
             self.params["R_"+str(i)] = parameters.get("R_"+str(i), parameters.get("R", 0))
             self.params["N_"+str(i)] = parameters.get("N_"+str(i), parameters.get("N", 100) // self.params["compartments"])
             self.params["S_"+str(i)] = self.params["N_"+str(i)] - self.params["E_"+str(i)] - self.params["I_"+str(i)] - self.params["R_"+str(i)]
-
-
 
     def run_model(self):
         tic = time.perf_counter()
@@ -36,13 +36,33 @@ class CompartmentModel(object):
                    "R": self.params.get("R_" + str(i), 0)}
             ICs["S"] = ICs["N"] - ICs["I"] - ICs["E"] - ICs["R"]
             compartments.append(Compartment(self.params, ICs))
+        traveller_log = [[] for _ in range(self.params["max_duration"]*self.params["timesteps_per_day"])]
+        travelling = []
         while t <= self.params["max_duration"] and any([(1 in i.state or 2 in i.state) for i in compartments]):
-            for i in compartments:
-                i.step(t, k)
+            for i in range(len(compartments)):
+                j = 0
+                while j < len(travelling):
+                    travelling[j].step(compartments[0], t)
+                    if travelling[j].end_time <= t:
+                        compartments[travelling[j].destination].add_traveller(travelling[j])
+                        del travelling[j]
+                    else:
+                        j += 1
+                compartments[i].step(t, k)
+                if np.random.uniform() < self.params["mixing_rate"]*self.params["timestep"]:
+                    dest = np.random.randint(0, len(compartments)-1)
+                    if dest >= i:
+                        dest += 1
+                    traveller = compartments[i].get_traveller(i, dest)
+                    traveller.start_time = t
+                    traveller.end_time = t + self.params["travel_duration"]
+                    travelling.append(traveller)
             t += self.params["timestep"]
+            traveller_log[k] = travelling[:]
             k += 1
         for c in compartments:
             c.finish(k)
+        traveller_log = traveller_log[:k]
         toc = time.perf_counter()
         classes = {}
         classes["S"] = np.array(compartments[0].classes["S"])
@@ -57,13 +77,14 @@ class CompartmentModel(object):
         classes["t"] = compartments[0].classes["t"]
 
         return CompartmentModelOutput(self.params, classes["R"][-1] - sum(self.params["R_"+str(i)] for i in range(self.params["compartments"])),
-                                      classes, round(t, 3), toc - tic, compartments)
+                                      classes, round(t, 3), toc - tic, compartments, traveller_log)
 
 
 class CompartmentModelOutput(modeloutput.ModelOutput):
-    def __init__(self, params, final_size, classes, duration, simulation_time, compartments):
+    def __init__(self, params, final_size, classes, duration, simulation_time, compartments, travellers):
         modeloutput.ModelOutput.__init__(self, "compartment_model", params, final_size, classes, duration, simulation_time, compartments)
         self.compartments = compartments
+        self.travellers = travellers
 
 
 class Compartment(object):
@@ -74,13 +95,14 @@ class Compartment(object):
         self.params["b"] = self.params.get("b", 1)
         self.params["lambda"] = (1 - maths.exp(-self.params["b"])) / self.params["beta"]
         self.params["infect_distance"] = self.params["b"] / maths.sqrt(self.ICs["N"])
+        self.params["max_travellers"] = self.params.get("max_travellers", round(max(0.5*self.ICs["N"], 8)))
 
         self.state = np.array(
-            [0] * self.ICs["S"] + [1] * self.ICs["E"] + [2] * self.ICs["I"] + [3] * self.ICs["R"])
-        self.x_coords = np.random.uniform(size=self.ICs["N"])
-        self.y_coords = np.random.uniform(size=self.ICs["N"])
-        self.x_velocs = np.random.uniform(-1, 1, size=self.ICs["N"]) * self.params["speed"] * self.params["timestep"]
-        self.y_velocs = np.random.uniform(-1, 1, size=self.ICs["N"]) * self.params["speed"] * self.params["timestep"]
+            [0] * self.ICs["S"] + [1] * self.ICs["E"] + [2] * self.ICs["I"] + [3] * self.ICs["R"] + [-1]*self.params["max_travellers"])
+        self.x_coords = np.random.uniform(size=len(self.state))
+        self.y_coords = np.random.uniform(size=len(self.state))
+        self.x_velocs = np.random.uniform(-1, 1, size=len(self.state)) * self.params["speed"] * self.params["timestep"]
+        self.y_velocs = np.random.uniform(-1, 1, size=len(self.state)) * self.params["speed"] * self.params["timestep"]
         infect_rate = self.params.get("lambda", 2)
         latency_rate = 1 / self.params.get("sigma", 1 / 4)
         recovery_rate = 1 / self.params.get("gamma", 1 / 6)
@@ -99,8 +121,8 @@ class Compartment(object):
             self.next_recovery_event[i] = self.recovery_function()
 
         self.state_log = np.zeros((self.params["max_duration"] * self.params["timesteps_per_day"], len(self.state)))
-        self.x_coords_log = np.zeros((self.params["max_duration"] * self.params["timesteps_per_day"], self.ICs["N"]))
-        self.y_coords_log = np.zeros((self.params["max_duration"] * self.params["timesteps_per_day"], self.ICs["N"]))
+        self.x_coords_log = np.zeros((self.params["max_duration"] * self.params["timesteps_per_day"], len(self.state)))
+        self.y_coords_log = np.zeros((self.params["max_duration"] * self.params["timesteps_per_day"], len(self.state)))
         self.event_log = [[] for _ in range(self.params["max_duration"] * self.params["timesteps_per_day"])]
         self.classes = {"S": [], "E": [], "I": [], "R": [], "t": []}
         self.state_log[0] = self.state
@@ -170,10 +192,60 @@ class Compartment(object):
         self.y_coords_log = self.y_coords_log[:k]
         self.event_log = self.event_log[:k]
 
+    def get_traveller(self, start, destination):
+        index = np.random.randint(0, len(self.state))
+        while self.state[index] == -1:
+            index = np.random.randint(0, len(self.state))
+        next_event = np.inf
+        if self.state[index] == 1:  # Exposed
+            next_event = self.next_event[index]
+            self.next_event[index] = np.inf
+        if self.state[index] == 2:  # Infectious
+            next_event = self.next_recovery_event[index]
+            self.next_recovery_event[index] = np.inf
+        traveller = Traveller(self.state[index], (self.x_coords[index], self.y_coords[index]), next_event, start, destination)
+        self.state[index] = -1
+        return traveller
+
+    def add_traveller(self, traveller):
+        try:
+            index = np.where(self.state == -1)[0][0]
+            self.state[index] = traveller.state
+            if traveller.state == 2:
+                self.next_event[index] = self.next_infect_function()
+                self.next_recovery_event[index] = traveller.next_event
+            if traveller.state == 1:
+                self.next_event[index] = traveller.next_event
+            self.x_coords[index] = 0.5
+            self.y_coords[index] = 0.5
+        except IndexError:
+            print("Too many travellers!!!")
+
+
+class Traveller(object):
+    def __init__(self, state, start_coords, next_event, start, destination):
+        self.state = state
+        self.start_coords = start_coords
+        self.next_event = next_event
+        self.start = start
+        self.destination = destination
+        self.start_time = 0
+        self.end_time = 0
+
+    def step(self, compartment, t):
+        if t >= self.next_event:
+            if self.state == 1:
+                self.state = 2
+                self.next_event = compartment.recovery_function()
+            if self.state == 2:
+                self.state = 3
+                self.next_event = np.inf
+
 
 if __name__ == "__main__":
     num_compartments = 9
-    output = CompartmentModel({"N": 700, "I": 1, "gamma": 1/6, "beta": 1/3, "b": 1, "compartments": num_compartments}).run_model()
+    output = CompartmentModel({"N": 700, "I_0": 1, "gamma": 1/6, "beta": 1/3, "b": 1, "compartments": num_compartments,
+                               "timesteps_per_day": 20}).run_model()
     print(f"Compartment Model took {output.simulation_time:0.2f} seconds to run, it lasted {output.duration} days, "
           + f"and had a final size of {output.final_size}")
 
@@ -188,4 +260,4 @@ if __name__ == "__main__":
         ax[i//row_length][i%row_length].set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
     plt.show()
     from epidemicmodeller import comparment_model_renderer
-    comparment_model_renderer.render_compartment_model(output)
+    comparment_model_renderer.render_compartment_model(output, days_per_second=2)
