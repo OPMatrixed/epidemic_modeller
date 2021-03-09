@@ -259,5 +259,5 @@ if __name__ == "__main__":
         ax[i//row_length][i%row_length].legend(["S", "E", "I", "R"])
         ax[i//row_length][i%row_length].set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
     plt.show()
-    from epidemicmodeller import comparment_model_renderer
-    comparment_model_renderer.render_compartment_model(output, days_per_second=2)
+    from epidemicmodeller import compartment_model_renderer
+    compartment_model_renderer.render_compartment_model(output, days_per_second=2)

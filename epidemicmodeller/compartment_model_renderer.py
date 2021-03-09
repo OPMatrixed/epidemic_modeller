@@ -9,6 +9,7 @@ import pygame
 def render_compartment_model(model_output, screensize=800, dotsize=3, days_per_second=4):
     pygame.init()
     screen = pygame.display.set_mode((screensize, screensize))
+    pygame.display.set_caption("Epidemic Modeller: Compartment model renderer")
     font = pygame.font.SysFont(None, 64)
 
     delay = 1/(model_output.params["timesteps_per_day"]*days_per_second)
