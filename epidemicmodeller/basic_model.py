@@ -151,5 +151,5 @@ if __name__ == "__main__":
     ax.legend(["S", "E", "I", "R"])
     ax.set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
     plt.show()
-    from epidemicmodeller import basicmodelrenderer
-    basicmodelrenderer.render_basic_model(output)
+    from epidemicmodeller import basic_model_renderer
+    basic_model_renderer.render_basic_model(output)

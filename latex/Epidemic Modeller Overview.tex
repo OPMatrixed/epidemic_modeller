@@ -32,7 +32,14 @@
 
 \section*{Basic Visual Model}
 \subsection*{Setup}
-We start with a region $A=[0,1]\times [0,1]$, and each individual $i$ has coordinates $(x_i, y_i)\in A$. Each individual starts with coordinates $x_i \sim U[0,1]$, $y_i \sim U[0,1]$, and has velocity $\frac{dx_i(t)}{dt} \sim U[-1,1]$, $\frac{dy_i(t)}{dt} \sim U[-1,1]$. Whenever an individual hits the boundary, e.g. $x_i=0$, then they 'bounce' off of the boundary by negating the velocity in the $x$ or $y$ component, whichever boundary we hit.
+We start with a region $A=[0,1]\times [0,1]$, and each individual $i$ has coordinates $(x_i, y_i)\in A$. Each individual starts with coordinates $x_i \sim U[0,1]$, $y_i \sim U[0,1]$, and has velocity $\frac{dx_i(t)}{dt} \sim U[-v,v]$, $\frac{dy_i(t)}{dt} \sim U[-v,v]$ for some speed parameter $v$. Whenever an individual hits the boundary, e.g. $x_i=0$, then they 'bounce' off of the boundary by negating the velocity in the $x$ or $y$ component, whichever boundary we hit.
+
+\begin{figure}[H]
+\label{BasicModelDiagram}
+\begin{center}
+\includegraphics[width=0.6\textwidth]{BasicModelDiagram1}
+\end{center}
+\end{figure}
 
 Each individual has state $s_i\in \{S,E,I,R\}$ and our model starts with $N_S$ people in the S class, $N_I$ in the I class, $N_E$ in the E class, and $N_R$ in the R class. When an individual enters the E class (after getting infected, or by initial condition), then they get assigned a time when their latency period will end, which is distributed $t_L \sim \text{Gamma}(\sigma)$. When an individual enters the I class, they get assigned a time when their infection period will end, which is distributed $t_R \sim \text{Gamma}(\frac{1}{\gamma\lambda}, \lambda)$. Also when an individual enters the I class, they get assigned a time at which they will next attempt to infect, with distribution $t_I\sim \text{Exp}(\lambda)$. Once an infectious person attempts to infect, they get assigned the next time when they will infect (with the same distribution), though they won't be able to attempt to infect any more if they recover before the time to next infect attempt.
 \subsubsection*{Infect attempts}

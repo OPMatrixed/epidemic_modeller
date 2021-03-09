@@ -39,17 +39,21 @@ class CompartmentModel(object):
         traveller_log = [[] for _ in range(self.params["max_duration"]*self.params["timesteps_per_day"])]
         travelling = []
         while t <= self.params["max_duration"] and any([(1 in i.state or 2 in i.state) for i in compartments]):
+            j = 0
+            while j < len(travelling):
+                # Update travellers
+                travelling[j].step(compartments[0], t)
+                if travelling[j].end_time <= t:
+                    # Traveller has arrived
+                    compartments[travelling[j].destination].add_traveller(travelling[j], t)
+                    del travelling[j]
+                else:
+                    j += 1
             for i in range(len(compartments)):
-                j = 0
-                while j < len(travelling):
-                    travelling[j].step(compartments[0], t)
-                    if travelling[j].end_time <= t:
-                        compartments[travelling[j].destination].add_traveller(travelling[j])
-                        del travelling[j]
-                    else:
-                        j += 1
+                # Then do a step in this compartment
                 compartments[i].step(t, k)
                 if np.random.uniform() < self.params["mixing_rate"]*self.params["timestep"]:
+                    # Randomly initiate a travel event
                     dest = np.random.randint(0, len(compartments)-1)
                     if dest >= i:
                         dest += 1
@@ -95,7 +99,7 @@ class Compartment(object):
         self.params["b"] = self.params.get("b", 1)
         self.params["lambda"] = (1 - maths.exp(-self.params["b"])) / self.params["beta"]
         self.params["infect_distance"] = self.params["b"] / maths.sqrt(self.ICs["N"])
-        self.params["max_travellers"] = self.params.get("max_travellers", round(max(0.5*self.ICs["N"], 8)))
+        self.params["max_travellers"] = self.params.get("max_travellers", round(max(0.3*self.ICs["N"], 8)))
 
         self.state = np.array(
             [0] * self.ICs["S"] + [1] * self.ICs["E"] + [2] * self.ICs["I"] + [3] * self.ICs["R"] + [-1]*self.params["max_travellers"])
@@ -207,12 +211,12 @@ class Compartment(object):
         self.state[index] = -1
         return traveller
 
-    def add_traveller(self, traveller):
+    def add_traveller(self, traveller, t):
         try:
             index = np.where(self.state == -1)[0][0]
             self.state[index] = traveller.state
             if traveller.state == 2:
-                self.next_event[index] = self.next_infect_function()
+                self.next_event[index] = t + self.next_infect_function()
                 self.next_recovery_event[index] = traveller.next_event
             if traveller.state == 1:
                 self.next_event[index] = traveller.next_event
@@ -250,14 +254,15 @@ if __name__ == "__main__":
           + f"and had a final size of {output.final_size}")
 
     row_length = maths.ceil(maths.sqrt(num_compartments))
-    fig, ax = plt.subplots(row_length, row_length, figsize=(row_length*3, row_length*3), dpi=100)
+    fig, ax = plt.subplots(row_length, row_length, figsize=(row_length*4, row_length*4), dpi=120)
     for i in range(num_compartments):
-        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["S"])
-        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["E"])
-        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["I"])
-        ax[i//row_length][i%row_length].plot(output.classes["t"], output.compartments[i].classes["R"])
-        ax[i//row_length][i%row_length].legend(["S", "E", "I", "R"])
-        ax[i//row_length][i%row_length].set(xlabel="Time (days)", ylabel="Population", title="Plot of epidemic")
+        current_plot = ax[i//row_length][i%row_length]
+        current_plot.plot(output.classes["t"], output.compartments[i].classes["S"])
+        current_plot.plot(output.classes["t"], output.compartments[i].classes["E"])
+        current_plot.plot(output.classes["t"], output.compartments[i].classes["I"])
+        current_plot.plot(output.classes["t"], output.compartments[i].classes["R"])
+        current_plot.legend(["S", "E", "I", "R"])
+        current_plot.set(xlabel="Time (days)", ylabel="Population")
     plt.show()
     from epidemicmodeller import compartment_model_renderer
     compartment_model_renderer.render_compartment_model(output, days_per_second=2)
