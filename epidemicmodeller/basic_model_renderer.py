@@ -20,12 +20,13 @@ def render_basic_model(model_output, screensize=800, dotsize=3, days_per_second=
     y_coord_log = model_output.data_log["y_coords_log"]
     state_log = model_output.data_log["state_log"]
 
-    time.sleep(2)
     for k in range(len(state_log)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.display.quit()
                 return
+        if k == 1:
+            time.sleep(2)
         screen.fill((0, 0, 0))
         colours = [pygame.Color(255, 255, 255),
                    pygame.Color(0, 255, 0),

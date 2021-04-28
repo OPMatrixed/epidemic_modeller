@@ -23,13 +23,14 @@ def render_compartment_model(model_output, screensize=800, dotsize=3, days_per_s
     col_box_length = screensize//num_cols
     for i in range(num_rows):
         regions += [(col_box_length*j + padding, col_box_length*i+padding) for j in range(num_cols)]
-    time.sleep(2)
 
     for k in range(len(compartments[0].state_log)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.display.quit()
                 return
+        if k == 1:
+            time.sleep(2)
         screen.fill((0, 0, 0))
         colours = [pygame.Color(255, 255, 255),
                    pygame.Color(0, 255, 0),
