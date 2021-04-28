@@ -130,7 +130,7 @@ class Compartment(object):
         self.params["b"] = self.params.get("b", 1)
         self.params["lambda"] = (1 - maths.exp(-self.params["b"])) / self.params["beta"]
         self.params["infect_distance"] = self.params["b"] / maths.sqrt(self.ICs["N"])
-        self.params["max_travellers"] = self.params.get("max_travellers", round(max(0.3*self.ICs["N"], 8)))
+        self.params["max_travellers"] = self.params.get("max_travellers", round(max(0.4*self.ICs["N"], 8)))
 
         # Define the state array, each individual has their own index i,
         # and the value at that position describes their class.
